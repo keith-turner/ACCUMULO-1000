@@ -250,28 +250,80 @@ public class ConditionalWriterTest {
     
     conn.tableOperations().create(table);
     
-    Authorizations auths = new Authorizations("A");
+    Authorizations auths = new Authorizations("A", "B");
     
     conn.securityOperations().changeUserAuthorizations("root", auths);
+
+    Authorizations filteredAuths = new Authorizations("A");
     
-    ConditionalWriter cw = new ConditionalWriterImpl(table, conn, auths);
+    ConditionalWriter cw = new ConditionalWriterImpl(table, conn, filteredAuths);
     
+    ColumnVisibility cva = new ColumnVisibility("A");
     ColumnVisibility cvb = new ColumnVisibility("B");
+    ColumnVisibility cvc = new ColumnVisibility("C");
     
+    // User has authorization, but didn't include it in the writer
     ConditionalMutation cm0 = new ConditionalMutation("99006");
     cm0.putConditionAbsent("tx", "seq", cvb);
-    cm0.put("name", "last", cvb, "doe");
-    cm0.put("name", "first", cvb, "john");
-    cm0.put("tx", "seq", cvb, "1");
-    Assert.assertEquals(ConditionalWriter.Status.VISERRED, cw.write(cm0).status);
+    cm0.put("name", "last", cva, "doe");
+    cm0.put("name", "first", cva, "john");
+    cm0.put("tx", "seq", cva, "1");
+    Assert.assertEquals(ConditionalWriter.Status.INVALID_VISIBILITY, cw.write(cm0).status);
     
     ConditionalMutation cm1 = new ConditionalMutation("99006");
     cm1.putCondition("tx", "seq", cvb, "1");
-    cm1.put("name", "last", cvb, "doe");
-    cm1.put("name", "first", cvb, "john");
-    cm1.put("tx", "seq", cvb, "1");
-    Assert.assertEquals(ConditionalWriter.Status.VISERRED, cw.write(cm1).status);
+    cm1.put("name", "last", cva, "doe");
+    cm1.put("name", "first", cva, "john");
+    cm1.put("tx", "seq", cva, "1");
+    Assert.assertEquals(ConditionalWriter.Status.INVALID_VISIBILITY, cw.write(cm1).status);
 
+    // User does not have the authorization
+    ConditionalMutation cm2 = new ConditionalMutation("99006");
+    cm2.putConditionAbsent("tx", "seq", cvc);
+    cm2.put("name", "last", cva, "doe");
+    cm2.put("name", "first", cva, "john");
+    cm2.put("tx", "seq", cva, "1");
+    Assert.assertEquals(ConditionalWriter.Status.INVALID_VISIBILITY, cw.write(cm2).status);
+    
+    ConditionalMutation cm3 = new ConditionalMutation("99006");
+    cm3.putCondition("tx", "seq", cvc, "1");
+    cm3.put("name", "last", cva, "doe");
+    cm3.put("name", "first", cva, "john");
+    cm3.put("tx", "seq", cva, "1");
+    Assert.assertEquals(ConditionalWriter.Status.INVALID_VISIBILITY, cw.write(cm3).status);
+
+    // if any visibility is bad, good visibilities don't override
+    ConditionalMutation cm4 = new ConditionalMutation("99006");
+    cm4.putConditionAbsent("tx", "seq", cvb);
+    cm4.putConditionAbsent("tx", "seq", cva);
+    cm4.put("name", "last", cva, "doe");
+    cm4.put("name", "first", cva, "john");
+    cm4.put("tx", "seq", cva, "1");
+    Assert.assertEquals(ConditionalWriter.Status.INVALID_VISIBILITY, cw.write(cm4).status);
+    
+    ConditionalMutation cm5 = new ConditionalMutation("99006");
+    cm5.putCondition("tx", "seq", cvb, "1");
+    cm5.putCondition("tx", "seq", cva, "1");
+    cm5.put("name", "last", cva, "doe");
+    cm5.put("name", "first", cva, "john");
+    cm5.put("tx", "seq", cva, "1");
+    Assert.assertEquals(ConditionalWriter.Status.INVALID_VISIBILITY, cw.write(cm5).status);
+
+    ConditionalMutation cm6 = new ConditionalMutation("99006");
+    cm6.putCondition("tx", "seq", cvb, "1");
+    cm6.putConditionAbsent("tx", "seq", cva);
+    cm6.put("name", "last", cva, "doe");
+    cm6.put("name", "first", cva, "john");
+    cm6.put("tx", "seq", cva, "1");
+    Assert.assertEquals(ConditionalWriter.Status.INVALID_VISIBILITY, cw.write(cm6).status);
+
+    ConditionalMutation cm7 = new ConditionalMutation("99006");
+    cm7.putConditionAbsent("tx", "seq", cvb);
+    cm7.putCondition("tx", "seq", cva, "1");
+    cm7.put("name", "last", cva, "doe");
+    cm7.put("name", "first", cva, "john");
+    cm7.put("tx", "seq", cva, "1");
+    Assert.assertEquals(ConditionalWriter.Status.INVALID_VISIBILITY, cw.write(cm7).status);
   }
   
   @Test

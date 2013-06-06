@@ -46,7 +46,7 @@ public interface ConditionalWriter {
     // mutation was written
     UNKNOWN,
     // A condition contained a column visibility that could never be seen
-    VISERRED,
+    INVALID_VISIBILITY,
     // nothing was done with this mutation, this is caused by previous
     // mutations failing in some way like timing out
     IGNORED
