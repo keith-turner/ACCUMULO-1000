@@ -15,10 +15,13 @@
  * limitations under the License.
  */
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Map.Entry;
+import java.util.TreeSet;
 
 import org.apache.accumulo.core.Constants;
 import org.apache.accumulo.core.client.BatchWriter;
@@ -415,6 +418,192 @@ public class ConditionalWriterTest {
     Assert.assertEquals("4", scanner.iterator().next().getValue().toString());
   }
 
+  @Test
+  public void testBatch() throws Exception {
+    String table = "foo6";
+    
+    ZooKeeperInstance zki = new ZooKeeperInstance(cluster.getInstanceName(), cluster.getZooKeepers());
+    Connector conn = zki.getConnector("root", new PasswordToken(secret));
+    
+    conn.tableOperations().create(table);
+    
+    conn.securityOperations().changeUserAuthorizations("root", new Authorizations("A", "B"));
+    
+    ColumnVisibility cvab = new ColumnVisibility("A|B");
+    
+    ArrayList<ConditionalMutation> mutations = new ArrayList<ConditionalMutation>();
+    
+    ConditionalMutation cm0 = new ConditionalMutation("99006");
+    cm0.putConditionAbsent("tx", "seq", cvab);
+    cm0.put("name", "last", cvab, "doe");
+    cm0.put("name", "first", cvab, "john");
+    cm0.put("tx", "seq", cvab, "1");
+    mutations.add(cm0);
+    
+    ConditionalMutation cm1 = new ConditionalMutation("59056");
+    cm1.putConditionAbsent("tx", "seq", cvab);
+    cm1.put("name", "last", cvab, "doe");
+    cm1.put("name", "first", cvab, "jane");
+    cm1.put("tx", "seq", cvab, "1");
+    mutations.add(cm1);
+    
+    ConditionalMutation cm2 = new ConditionalMutation("19059");
+    cm2.putConditionAbsent("tx", "seq", cvab);
+    cm2.put("name", "last", cvab, "doe");
+    cm2.put("name", "first", cvab, "jack");
+    cm2.put("tx", "seq", cvab, "1");
+    mutations.add(cm2);
+    
+    ConditionalWriter cw = new ConditionalWriterImpl(table, conn, new Authorizations("A"));
+    Iterator<ConditionalWriter.Result> results = cw.write(mutations.iterator());
+    int count = 0;
+    while (results.hasNext()) {
+      ConditionalWriter.Result result = results.next();
+      Assert.assertEquals(ConditionalWriter.Status.ACCEPTED, result.status);
+      count++;
+    }
+    
+    Assert.assertEquals(3, count);
+
+    Scanner scanner = conn.createScanner(table, new Authorizations("A"));
+    scanner.fetchColumn(new Text("tx"), new Text("seq"));
+    
+    for (String row : new String[] {"99006", "59056", "19059"}) {
+      scanner.setRange(new Range(row));
+      Assert.assertEquals("1", scanner.iterator().next().getValue().toString());
+    }
+
+    TreeSet<Text> splits = new TreeSet<Text>();
+    splits.add(new Text("7"));
+    splits.add(new Text("3"));
+    conn.tableOperations().addSplits(table, splits);
+
+    mutations.clear();
+
+    ConditionalMutation cm3 = new ConditionalMutation("99006");
+    cm3.putCondition("tx", "seq", cvab, "1");
+    cm3.put("name", "last", cvab, "Doe");
+    cm3.put("tx", "seq", cvab, "2");
+    mutations.add(cm3);
+    
+    ConditionalMutation cm4 = new ConditionalMutation("59056");
+    cm4.putConditionAbsent("tx", "seq", cvab);
+    cm4.put("name", "last", cvab, "Doe");
+    cm4.put("tx", "seq", cvab, "1");
+    mutations.add(cm4);
+    
+    ConditionalMutation cm5 = new ConditionalMutation("19059");
+    cm5.putCondition("tx", "seq", cvab, "2");
+    cm5.put("name", "last", cvab, "Doe");
+    cm5.put("tx", "seq", cvab, "3");
+    mutations.add(cm5);
+
+    results = cw.write(mutations.iterator());
+    int accepted = 0;
+    int rejected = 0;
+    while (results.hasNext()) {
+      ConditionalWriter.Result result = results.next();
+      if (new String(result.mutation.getRow()).equals("99006")) {
+        Assert.assertEquals(ConditionalWriter.Status.ACCEPTED, result.status);
+        accepted++;
+      } else {
+        Assert.assertEquals(ConditionalWriter.Status.REJECTED, result.status);
+        rejected++;
+      }
+    }
+    
+    Assert.assertEquals(1, accepted);
+    Assert.assertEquals(2, rejected);
+
+    for (String row : new String[] {"59056", "19059"}) {
+      scanner.setRange(new Range(row));
+      Assert.assertEquals("1", scanner.iterator().next().getValue().toString());
+    }
+    
+    scanner.setRange(new Range("99006"));
+    Assert.assertEquals("2", scanner.iterator().next().getValue().toString());
+
+    scanner.clearColumns();
+    scanner.fetchColumn(new Text("name"), new Text("last"));
+    Assert.assertEquals("Doe", scanner.iterator().next().getValue().toString());
+  }
+  
+  @Test
+  public void testBatchErrors() throws Exception {
+    
+    String table = "foo7";
+    
+    ZooKeeperInstance zki = new ZooKeeperInstance(cluster.getInstanceName(), cluster.getZooKeepers());
+    Connector conn = zki.getConnector("root", new PasswordToken(secret));
+    
+    conn.tableOperations().create(table);
+    conn.tableOperations().addConstraint(table, AlphaNumKeyConstraint.class.getName());
+    conn.tableOperations().clone(table, table + "_clone", true, new HashMap<String,String>(), new HashSet<String>());
+
+    conn.securityOperations().changeUserAuthorizations("root", new Authorizations("A", "B"));
+    
+    ColumnVisibility cvaob = new ColumnVisibility("A|B");
+    ColumnVisibility cvaab = new ColumnVisibility("A&B");
+    
+    ArrayList<ConditionalMutation> mutations = new ArrayList<ConditionalMutation>();
+    
+    ConditionalMutation cm0 = new ConditionalMutation("99006");
+    cm0.putConditionAbsent("tx", "seq", cvaob);
+    cm0.put("name+", "last", cvaob, "doe");
+    cm0.put("name", "first", cvaob, "john");
+    cm0.put("tx", "seq", cvaob, "1");
+    mutations.add(cm0);
+    
+    ConditionalMutation cm1 = new ConditionalMutation("59056");
+    cm1.putConditionAbsent("tx", "seq", cvaab);
+    cm1.put("name", "last", cvaab, "doe");
+    cm1.put("name", "first", cvaab, "jane");
+    cm1.put("tx", "seq", cvaab, "1");
+    mutations.add(cm1);
+    
+    ConditionalMutation cm2 = new ConditionalMutation("19059");
+    cm2.putConditionAbsent("tx", "seq", cvaob);
+    cm2.put("name", "last", cvaob, "doe");
+    cm2.put("name", "first", cvaob, "jack");
+    cm2.put("tx", "seq", cvaob, "1");
+    mutations.add(cm2);
+    
+    ConditionalMutation cm3 = new ConditionalMutation("90909");
+    cm3.putCondition("tx", "seq", cvaob, "1");
+    cm3.put("name", "last", cvaob, "doe");
+    cm3.put("name", "first", cvaob, "john");
+    cm3.put("tx", "seq", cvaob, "2");
+    mutations.add(cm3);
+
+    ConditionalWriter cw = new ConditionalWriterImpl(table, conn, new Authorizations("A"));
+    Iterator<ConditionalWriter.Result> results = cw.write(mutations.iterator());
+    HashSet<String> rows = new HashSet<String>();
+    while (results.hasNext()) {
+      ConditionalWriter.Result result = results.next();
+      String row = new String(result.mutation.getRow());
+      if (row.equals("19059")) {
+        Assert.assertEquals(ConditionalWriter.Status.ACCEPTED, result.status);
+      } else if (row.equals("59056")) {
+        Assert.assertEquals(ConditionalWriter.Status.INVISIBLE_VISIBILITY, result.status);
+      } else if (row.equals("99006")) {
+        Assert.assertEquals(ConditionalWriter.Status.VIOLATED, result.status);
+      } else if (row.equals("90909")) {
+        Assert.assertEquals(ConditionalWriter.Status.REJECTED, result.status);
+      }
+      rows.add(row);
+    }
+    
+    Assert.assertEquals(4, rows.size());
+
+    Scanner scanner = conn.createScanner(table, new Authorizations("A"));
+    scanner.fetchColumn(new Text("tx"), new Text("seq"));
+    
+    Iterator<Entry<Key,Value>> iter = scanner.iterator();
+    Assert.assertEquals("1", iter.next().getValue().toString());
+    Assert.assertFalse(iter.hasNext());
+
+  }
+  
   @Test
   public void testSecurity() {
     // test against table user does not have read and/or write permissions for
