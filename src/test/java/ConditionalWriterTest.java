@@ -16,6 +16,8 @@
  */
 
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map.Entry;
 
 import org.apache.accumulo.core.Constants;
@@ -34,6 +36,7 @@ import org.apache.accumulo.core.iterators.LongCombiner.Type;
 import org.apache.accumulo.core.iterators.user.SummingCombiner;
 import org.apache.accumulo.core.security.Authorizations;
 import org.apache.accumulo.core.security.ColumnVisibility;
+import org.apache.accumulo.examples.simple.constraints.AlphaNumKeyConstraint;
 import org.apache.accumulo.minicluster.MiniAccumuloCluster;
 import org.apache.accumulo.minicluster.MiniAccumuloConfig;
 import org.apache.hadoop.io.Text;
@@ -327,8 +330,35 @@ public class ConditionalWriterTest {
   }
   
   @Test
-  public void testConstraints() {
+  public void testConstraints() throws Exception {
     // ensure constraint violations are properly reported
+    String table = "foo5";
+    
+    ZooKeeperInstance zki = new ZooKeeperInstance(cluster.getInstanceName(), cluster.getZooKeepers());
+    Connector conn = zki.getConnector("root", new PasswordToken(secret));
+    
+    conn.tableOperations().create(table);
+    conn.tableOperations().addConstraint(table, AlphaNumKeyConstraint.class.getName());
+    conn.tableOperations().clone(table, table + "_clone", true, new HashMap<String,String>(), new HashSet<String>());
+    
+    Scanner scanner = conn.createScanner(table + "_clone", new Authorizations());
+
+    ConditionalWriter cw = new ConditionalWriterImpl(table + "_clone", conn, new Authorizations());
+
+    ConditionalMutation cm0 = new ConditionalMutation("99006+");
+    cm0.putConditionAbsent("tx", "seq", new ColumnVisibility());
+    cm0.put("tx", "seq", "1");
+    
+    Assert.assertEquals(ConditionalWriter.Status.VIOLATED, cw.write(cm0).status);
+    Assert.assertFalse(scanner.iterator().hasNext());
+    
+    ConditionalMutation cm1 = new ConditionalMutation("99006");
+    cm1.putConditionAbsent("tx", "seq", new ColumnVisibility());
+    cm1.put("tx", "seq", "1");
+    
+    Assert.assertEquals(ConditionalWriter.Status.ACCEPTED, cw.write(cm1).status);
+    Assert.assertTrue(scanner.iterator().hasNext());
+
   }
 
   @Test
@@ -388,6 +418,11 @@ public class ConditionalWriterTest {
   @Test
   public void testSecurity() {
     // test against table user does not have read and/or write permissions for
+  }
+
+  @Test
+  public void testTimeout() {
+    
   }
 
   @AfterClass

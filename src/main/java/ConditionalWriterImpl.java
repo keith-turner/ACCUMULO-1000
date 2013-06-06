@@ -28,6 +28,7 @@ import org.apache.accumulo.core.client.BatchWriter;
 import org.apache.accumulo.core.client.BatchWriterConfig;
 import org.apache.accumulo.core.client.Connector;
 import org.apache.accumulo.core.client.IteratorSetting;
+import org.apache.accumulo.core.client.MutationsRejectedException;
 import org.apache.accumulo.core.client.Scanner;
 import org.apache.accumulo.core.client.impl.ScannerOptions;
 import org.apache.accumulo.core.data.ArrayByteSequence;
@@ -131,8 +132,19 @@ public class ConditionalWriterImpl implements ConditionalWriter {
         if (condtionMap.size() != ac) {
           results.add(new Result(Status.REJECTED, cm));
         } else {
-          results.add(new Result(Status.ACCEPTED, cm));
-          bw.addMutation(cm);
+          try {
+            bw.addMutation(cm);
+            bw.close();
+            results.add(new Result(Status.ACCEPTED, cm));
+          } catch (MutationsRejectedException mre) {
+            results.add(new Result(Status.VIOLATED, cm));
+            continue mloop;
+          } finally {
+            bw.close();
+            bw = conn.createBatchWriter(table, new BatchWriterConfig());
+          }
+          
+
         }
       }
 
