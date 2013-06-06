@@ -22,11 +22,14 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.accumulo.core.client.BatchWriter;
 import org.apache.accumulo.core.client.BatchWriterConfig;
 import org.apache.accumulo.core.client.Connector;
+import org.apache.accumulo.core.client.IteratorSetting;
 import org.apache.accumulo.core.client.Scanner;
+import org.apache.accumulo.core.client.impl.ScannerOptions;
 import org.apache.accumulo.core.data.ArrayByteSequence;
 import org.apache.accumulo.core.data.ByteSequence;
 import org.apache.accumulo.core.data.Key;
@@ -45,11 +48,18 @@ import org.apache.hadoop.io.Text;
  */
 public class ConditionalWriterImpl implements ConditionalWriter {
   
+  private static class ScanOpts extends ScannerOptions {
+    public void configure(Scanner scanner) {
+      setOptions((ScannerOptions) scanner, this);
+    }
+  }
+
   private Connector conn;
   private String table;
   private Authorizations auths;
   private VisibilityEvaluator ve;
   private LRUMap cache;
+  private ScanOpts scanOpts = new ScanOpts() {};
   
   public ConditionalWriterImpl(String table, Connector conn, Authorizations auths) {
     this.conn = conn;
@@ -74,6 +84,9 @@ public class ConditionalWriterImpl implements ConditionalWriter {
         ConditionalMutation cm = mutations.next();
         
         byte[] row = cm.getRow();
+        
+        scanOpts.configure(scanner);
+
         scanner.setRange(new Range(new Text(row)));
         
         HashMap<ColumnCondition,ByteSequence> condtionMap = new HashMap<ColumnCondition,ByteSequence>();
@@ -153,6 +166,30 @@ public class ConditionalWriterImpl implements ConditionalWriter {
 
   public Result write(ConditionalMutation mutation) {
     return write(Collections.singleton(mutation).iterator()).next();
+  }
+  
+  public void addScanIterator(IteratorSetting cfg) {
+    scanOpts.addScanIterator(cfg);
+  }
+  
+  public void removeScanIterator(String iteratorName) {
+    scanOpts.removeScanIterator(iteratorName);
+  }
+  
+  public void updateScanIteratorOption(String iteratorName, String key, String value) {
+    scanOpts.updateScanIteratorOption(iteratorName, key, value);
+  }
+  
+  public void clearScanIterators() {
+    scanOpts.clearScanIterators();
+  }
+  
+  public void setTimeout(long timeOut, TimeUnit timeUnit) {
+    scanOpts.setTimeout(timeOut, timeUnit);
+  }
+  
+  public long getTimeout(TimeUnit timeUnit) {
+    return scanOpts.getTimeout(timeUnit);
   }
   
 }

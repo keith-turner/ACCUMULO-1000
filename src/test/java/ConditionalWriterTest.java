@@ -15,16 +15,23 @@
  * limitations under the License.
  */
 
+import java.util.Collections;
 import java.util.Map.Entry;
 
 import org.apache.accumulo.core.Constants;
+import org.apache.accumulo.core.client.BatchWriter;
+import org.apache.accumulo.core.client.BatchWriterConfig;
 import org.apache.accumulo.core.client.Connector;
+import org.apache.accumulo.core.client.IteratorSetting;
 import org.apache.accumulo.core.client.Scanner;
 import org.apache.accumulo.core.client.ZooKeeperInstance;
 import org.apache.accumulo.core.client.security.tokens.PasswordToken;
 import org.apache.accumulo.core.data.Key;
+import org.apache.accumulo.core.data.Mutation;
 import org.apache.accumulo.core.data.Range;
 import org.apache.accumulo.core.data.Value;
+import org.apache.accumulo.core.iterators.LongCombiner.Type;
+import org.apache.accumulo.core.iterators.user.SummingCombiner;
 import org.apache.accumulo.core.security.Authorizations;
 import org.apache.accumulo.core.security.ColumnVisibility;
 import org.apache.accumulo.minicluster.MiniAccumuloCluster;
@@ -273,9 +280,57 @@ public class ConditionalWriterTest {
   }
 
   @Test
-  public void testIterators() {
-    // test configuring scan time iterators on ConditionalWriter
+  public void testIterators() throws Exception {
+    String table = "foo4";
     
+    ZooKeeperInstance zki = new ZooKeeperInstance(cluster.getInstanceName(), cluster.getZooKeepers());
+    Connector conn = zki.getConnector("root", new PasswordToken(secret));
+    
+    conn.tableOperations().create(table, false);
+    
+    BatchWriter bw = conn.createBatchWriter(table, new BatchWriterConfig());
+    
+    Mutation m = new Mutation("ACCUMULO-1000");
+    m.put("count", "comments", "1");
+    bw.addMutation(m);
+    bw.addMutation(m);
+    bw.addMutation(m);
+    bw.close();
+    
+    IteratorSetting iterConfig = new IteratorSetting(10, SummingCombiner.class);
+    SummingCombiner.setEncodingType(iterConfig, Type.STRING);
+    SummingCombiner.setColumns(iterConfig, Collections.singletonList(new IteratorSetting.Column("count")));
+    
+    Scanner scanner = conn.createScanner(table, new Authorizations());
+    scanner.addScanIterator(iterConfig);
+    scanner.setRange(new Range("ACCUMULO-1000"));
+    scanner.fetchColumn(new Text("count"), new Text("comments"));
+    
+    Assert.assertEquals("3", scanner.iterator().next().getValue().toString());
+
+    ConditionalWriter cw = new ConditionalWriterImpl(table, conn, new Authorizations());
+    
+    ConditionalMutation cm0 = new ConditionalMutation("ACCUMULO-1000");
+    cm0.putCondition("count", "comments", new ColumnVisibility(), "3");
+    cm0.put("count", "comments", "1");
+    Assert.assertEquals(ConditionalWriter.Status.REJECTED, cw.write(cm0).status);
+    Assert.assertEquals("3", scanner.iterator().next().getValue().toString());
+    
+    cw.addScanIterator(iterConfig);
+    
+    Assert.assertEquals(ConditionalWriter.Status.ACCEPTED, cw.write(cm0).status);
+    Assert.assertEquals("4", scanner.iterator().next().getValue().toString());
+    
+    if (System.currentTimeMillis() % 2 == 0)
+      cw.removeScanIterator(iterConfig.getName());
+    else
+      cw.clearScanIterators();
+
+    ConditionalMutation cm1 = new ConditionalMutation("ACCUMULO-1000");
+    cm1.putCondition("count", "comments", new ColumnVisibility(), "4");
+    cm1.put("count", "comments", "1");
+    Assert.assertEquals(ConditionalWriter.Status.REJECTED, cw.write(cm1).status);
+    Assert.assertEquals("4", scanner.iterator().next().getValue().toString());
   }
 
   @Test
