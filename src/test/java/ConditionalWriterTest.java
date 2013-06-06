@@ -268,14 +268,14 @@ public class ConditionalWriterTest {
     cm0.put("name", "last", cva, "doe");
     cm0.put("name", "first", cva, "john");
     cm0.put("tx", "seq", cva, "1");
-    Assert.assertEquals(ConditionalWriter.Status.INVALID_VISIBILITY, cw.write(cm0).status);
+    Assert.assertEquals(ConditionalWriter.Status.INVISIBLE_VISIBILITY, cw.write(cm0).status);
     
     ConditionalMutation cm1 = new ConditionalMutation("99006");
     cm1.putCondition("tx", "seq", cvb, "1");
     cm1.put("name", "last", cva, "doe");
     cm1.put("name", "first", cva, "john");
     cm1.put("tx", "seq", cva, "1");
-    Assert.assertEquals(ConditionalWriter.Status.INVALID_VISIBILITY, cw.write(cm1).status);
+    Assert.assertEquals(ConditionalWriter.Status.INVISIBLE_VISIBILITY, cw.write(cm1).status);
 
     // User does not have the authorization
     ConditionalMutation cm2 = new ConditionalMutation("99006");
@@ -283,14 +283,14 @@ public class ConditionalWriterTest {
     cm2.put("name", "last", cva, "doe");
     cm2.put("name", "first", cva, "john");
     cm2.put("tx", "seq", cva, "1");
-    Assert.assertEquals(ConditionalWriter.Status.INVALID_VISIBILITY, cw.write(cm2).status);
+    Assert.assertEquals(ConditionalWriter.Status.INVISIBLE_VISIBILITY, cw.write(cm2).status);
     
     ConditionalMutation cm3 = new ConditionalMutation("99006");
     cm3.putCondition("tx", "seq", cvc, "1");
     cm3.put("name", "last", cva, "doe");
     cm3.put("name", "first", cva, "john");
     cm3.put("tx", "seq", cva, "1");
-    Assert.assertEquals(ConditionalWriter.Status.INVALID_VISIBILITY, cw.write(cm3).status);
+    Assert.assertEquals(ConditionalWriter.Status.INVISIBLE_VISIBILITY, cw.write(cm3).status);
 
     // if any visibility is bad, good visibilities don't override
     ConditionalMutation cm4 = new ConditionalMutation("99006");
@@ -299,7 +299,7 @@ public class ConditionalWriterTest {
     cm4.put("name", "last", cva, "doe");
     cm4.put("name", "first", cva, "john");
     cm4.put("tx", "seq", cva, "1");
-    Assert.assertEquals(ConditionalWriter.Status.INVALID_VISIBILITY, cw.write(cm4).status);
+    Assert.assertEquals(ConditionalWriter.Status.INVISIBLE_VISIBILITY, cw.write(cm4).status);
     
     ConditionalMutation cm5 = new ConditionalMutation("99006");
     cm5.putCondition("tx", "seq", cvb, "1");
@@ -307,7 +307,7 @@ public class ConditionalWriterTest {
     cm5.put("name", "last", cva, "doe");
     cm5.put("name", "first", cva, "john");
     cm5.put("tx", "seq", cva, "1");
-    Assert.assertEquals(ConditionalWriter.Status.INVALID_VISIBILITY, cw.write(cm5).status);
+    Assert.assertEquals(ConditionalWriter.Status.INVISIBLE_VISIBILITY, cw.write(cm5).status);
 
     ConditionalMutation cm6 = new ConditionalMutation("99006");
     cm6.putCondition("tx", "seq", cvb, "1");
@@ -315,7 +315,7 @@ public class ConditionalWriterTest {
     cm6.put("name", "last", cva, "doe");
     cm6.put("name", "first", cva, "john");
     cm6.put("tx", "seq", cva, "1");
-    Assert.assertEquals(ConditionalWriter.Status.INVALID_VISIBILITY, cw.write(cm6).status);
+    Assert.assertEquals(ConditionalWriter.Status.INVISIBLE_VISIBILITY, cw.write(cm6).status);
 
     ConditionalMutation cm7 = new ConditionalMutation("99006");
     cm7.putConditionAbsent("tx", "seq", cvb);
@@ -323,7 +323,7 @@ public class ConditionalWriterTest {
     cm7.put("name", "last", cva, "doe");
     cm7.put("name", "first", cva, "john");
     cm7.put("tx", "seq", cva, "1");
-    Assert.assertEquals(ConditionalWriter.Status.INVALID_VISIBILITY, cw.write(cm7).status);
+    Assert.assertEquals(ConditionalWriter.Status.INVISIBLE_VISIBILITY, cw.write(cm7).status);
   }
   
   @Test

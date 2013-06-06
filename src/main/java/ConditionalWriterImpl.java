@@ -96,7 +96,7 @@ public class ConditionalWriterImpl implements ConditionalWriter {
         for (ColumnCondition cc : conditions) {
           
           if (!isVisible(cc.cv)) {
-            results.add(new Result(Status.INVALID_VISIBILITY, cm));
+            results.add(new Result(Status.INVISIBLE_VISIBILITY, cm));
             continue mloop;
           }
 
