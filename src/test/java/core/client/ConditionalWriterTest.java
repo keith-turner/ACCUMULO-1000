@@ -1,3 +1,4 @@
+package core.client;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -49,6 +50,11 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
+import core.client.ConditionalWriter.Result;
+import core.client.ConditionalWriter.Status;
+import core.client.impl.ConditionalWriterImpl;
+import core.data.ConditionalMutation;
+
 /**
  * 
  */
@@ -81,29 +87,29 @@ public class ConditionalWriterTest {
     cm0.put("name", "last", "doe");
     cm0.put("name", "first", "john");
     cm0.put("tx", "seq", "1");
-    Assert.assertEquals(ConditionalWriter.Status.ACCEPTED, cw.write(cm0).status);
-    Assert.assertEquals(ConditionalWriter.Status.REJECTED, cw.write(cm0).status);
+    Assert.assertEquals(Status.ACCEPTED, cw.write(cm0).getStatus());
+    Assert.assertEquals(Status.REJECTED, cw.write(cm0).getStatus());
 
     // mutation conditional on column tx:seq being 1
     ConditionalMutation cm1 = new ConditionalMutation("99006");
     cm1.putCondition("tx", "seq", new ColumnVisibility(), "1");
     cm1.put("name", "last", "Doe");
     cm1.put("tx", "seq", "2");
-    Assert.assertEquals(ConditionalWriter.Status.ACCEPTED, cw.write(cm1).status);
+    Assert.assertEquals(Status.ACCEPTED, cw.write(cm1).getStatus());
 
     // test condition where value differs
     ConditionalMutation cm2 = new ConditionalMutation("99006");
     cm2.putCondition("tx", "seq", new ColumnVisibility(), "1");
     cm2.put("name", "last", "DOE");
     cm2.put("tx", "seq", "2");
-    Assert.assertEquals(ConditionalWriter.Status.REJECTED, cw.write(cm2).status);
+    Assert.assertEquals(Status.REJECTED, cw.write(cm2).getStatus());
     
     // test condition where column does not exists
     ConditionalMutation cm3 = new ConditionalMutation("99006");
     cm3.putCondition("txtypo", "seq", new ColumnVisibility(), "1"); // does not exists
     cm3.put("name", "last", "deo");
     cm3.put("tx", "seq", "2");
-    Assert.assertEquals(ConditionalWriter.Status.REJECTED, cw.write(cm3).status);
+    Assert.assertEquals(Status.REJECTED, cw.write(cm3).getStatus());
     
     // test two conditions, where one should fail
     ConditionalMutation cm4 = new ConditionalMutation("99006");
@@ -111,7 +117,7 @@ public class ConditionalWriterTest {
     cm4.putCondition("name", "last", new ColumnVisibility(), "doe");
     cm4.put("name", "last", "deo");
     cm4.put("tx", "seq", "3");
-    Assert.assertEquals(ConditionalWriter.Status.REJECTED, cw.write(cm4).status);
+    Assert.assertEquals(Status.REJECTED, cw.write(cm4).getStatus());
 
     // test two conditions, where one should fail
     ConditionalMutation cm5 = new ConditionalMutation("99006");
@@ -119,7 +125,7 @@ public class ConditionalWriterTest {
     cm5.putCondition("name", "last", new ColumnVisibility(), "Doe");
     cm5.put("name", "last", "deo");
     cm5.put("tx", "seq", "3");
-    Assert.assertEquals(ConditionalWriter.Status.REJECTED, cw.write(cm5).status);
+    Assert.assertEquals(Status.REJECTED, cw.write(cm5).getStatus());
 
     // ensure rejected mutations did not write
     Scanner scanner = conn.createScanner("foo", Constants.NO_AUTHS);
@@ -133,7 +139,7 @@ public class ConditionalWriterTest {
     cm6.putCondition("name", "last", new ColumnVisibility(), "Doe");
     cm6.put("name", "last", "DOE");
     cm6.put("tx", "seq", "3");
-    Assert.assertEquals(ConditionalWriter.Status.ACCEPTED, cw.write(cm6).status);
+    Assert.assertEquals(Status.ACCEPTED, cw.write(cm6).getStatus());
     
     Assert.assertEquals("DOE", scanner.iterator().next().getValue().toString());
     
@@ -143,13 +149,13 @@ public class ConditionalWriterTest {
     cm7.putDelete("name", "last");
     cm7.putDelete("name", "first");
     cm7.putDelete("tx", "seq");
-    Assert.assertEquals(ConditionalWriter.Status.ACCEPTED, cw.write(cm7).status);
+    Assert.assertEquals(Status.ACCEPTED, cw.write(cm7).getStatus());
     
     Assert.assertFalse(scanner.iterator().hasNext());
 
     // add the row back
-    Assert.assertEquals(ConditionalWriter.Status.ACCEPTED, cw.write(cm0).status);
-    Assert.assertEquals(ConditionalWriter.Status.REJECTED, cw.write(cm0).status);
+    Assert.assertEquals(Status.ACCEPTED, cw.write(cm0).getStatus());
+    Assert.assertEquals(Status.REJECTED, cw.write(cm0).getStatus());
     
     Assert.assertEquals("doe", scanner.iterator().next().getValue().toString());
   }
@@ -177,7 +183,7 @@ public class ConditionalWriterTest {
     cm0.put("name", "last", cva, "doe");
     cm0.put("name", "first", cva, "john");
     cm0.put("tx", "seq", cva, "1");
-    Assert.assertEquals(ConditionalWriter.Status.ACCEPTED, cw.write(cm0).status);
+    Assert.assertEquals(Status.ACCEPTED, cw.write(cm0).getStatus());
     
     Scanner scanner = conn.createScanner(table, auths);
     scanner.setRange(new Range("99006"));
@@ -193,7 +199,7 @@ public class ConditionalWriterTest {
     cm1.put("name", "last", cva, "Doe");
     cm1.put("name", "first", cva, "John");
     cm1.put("tx", "seq", cva, "2");
-    Assert.assertEquals(ConditionalWriter.Status.REJECTED, cw.write(cm1).status);
+    Assert.assertEquals(Status.REJECTED, cw.write(cm1).getStatus());
     
     // test wrong colq
     ConditionalMutation cm2 = new ConditionalMutation("99006");
@@ -201,7 +207,7 @@ public class ConditionalWriterTest {
     cm2.put("name", "last", cva, "Doe");
     cm2.put("name", "first", cva, "John");
     cm2.put("tx", "seq", cva, "2");
-    Assert.assertEquals(ConditionalWriter.Status.REJECTED, cw.write(cm2).status);
+    Assert.assertEquals(Status.REJECTED, cw.write(cm2).getStatus());
     
     // test wrong colv
     ConditionalMutation cm3 = new ConditionalMutation("99006");
@@ -209,7 +215,7 @@ public class ConditionalWriterTest {
     cm3.put("name", "last", cva, "Doe");
     cm3.put("name", "first", cva, "John");
     cm3.put("tx", "seq", cva, "2");
-    Assert.assertEquals(ConditionalWriter.Status.REJECTED, cw.write(cm3).status);
+    Assert.assertEquals(Status.REJECTED, cw.write(cm3).getStatus());
 
     // test wrong timestamp
     ConditionalMutation cm4 = new ConditionalMutation("99006");
@@ -217,7 +223,7 @@ public class ConditionalWriterTest {
     cm4.put("name", "last", cva, "Doe");
     cm4.put("name", "first", cva, "John");
     cm4.put("tx", "seq", cva, "2");
-    Assert.assertEquals(ConditionalWriter.Status.REJECTED, cw.write(cm4).status);
+    Assert.assertEquals(Status.REJECTED, cw.write(cm4).getStatus());
     
     // test wrong timestamp
     ConditionalMutation cm5 = new ConditionalMutation("99006");
@@ -225,7 +231,7 @@ public class ConditionalWriterTest {
     cm5.put("name", "last", cva, "Doe");
     cm5.put("name", "first", cva, "John");
     cm5.put("tx", "seq", cva, "2");
-    Assert.assertEquals(ConditionalWriter.Status.REJECTED, cw.write(cm5).status);
+    Assert.assertEquals(Status.REJECTED, cw.write(cm5).getStatus());
 
     // ensure no updates were made
     entry = scanner.iterator().next();
@@ -237,7 +243,7 @@ public class ConditionalWriterTest {
     cm6.put("name", "last", cva, "Doe");
     cm6.put("name", "first", cva, "John");
     cm6.put("tx", "seq", cva, "2");
-    Assert.assertEquals(ConditionalWriter.Status.ACCEPTED, cw.write(cm6).status);
+    Assert.assertEquals(Status.ACCEPTED, cw.write(cm6).getStatus());
 
     entry = scanner.iterator().next();
     Assert.assertEquals("2", entry.getValue().toString());
@@ -274,14 +280,14 @@ public class ConditionalWriterTest {
     cm0.put("name", "last", cva, "doe");
     cm0.put("name", "first", cva, "john");
     cm0.put("tx", "seq", cva, "1");
-    Assert.assertEquals(ConditionalWriter.Status.INVISIBLE_VISIBILITY, cw.write(cm0).status);
+    Assert.assertEquals(Status.INVISIBLE_VISIBILITY, cw.write(cm0).getStatus());
     
     ConditionalMutation cm1 = new ConditionalMutation("99006");
     cm1.putCondition("tx", "seq", cvb, "1");
     cm1.put("name", "last", cva, "doe");
     cm1.put("name", "first", cva, "john");
     cm1.put("tx", "seq", cva, "1");
-    Assert.assertEquals(ConditionalWriter.Status.INVISIBLE_VISIBILITY, cw.write(cm1).status);
+    Assert.assertEquals(Status.INVISIBLE_VISIBILITY, cw.write(cm1).getStatus());
 
     // User does not have the authorization
     ConditionalMutation cm2 = new ConditionalMutation("99006");
@@ -289,14 +295,14 @@ public class ConditionalWriterTest {
     cm2.put("name", "last", cva, "doe");
     cm2.put("name", "first", cva, "john");
     cm2.put("tx", "seq", cva, "1");
-    Assert.assertEquals(ConditionalWriter.Status.INVISIBLE_VISIBILITY, cw.write(cm2).status);
+    Assert.assertEquals(Status.INVISIBLE_VISIBILITY, cw.write(cm2).getStatus());
     
     ConditionalMutation cm3 = new ConditionalMutation("99006");
     cm3.putCondition("tx", "seq", cvc, "1");
     cm3.put("name", "last", cva, "doe");
     cm3.put("name", "first", cva, "john");
     cm3.put("tx", "seq", cva, "1");
-    Assert.assertEquals(ConditionalWriter.Status.INVISIBLE_VISIBILITY, cw.write(cm3).status);
+    Assert.assertEquals(Status.INVISIBLE_VISIBILITY, cw.write(cm3).getStatus());
 
     // if any visibility is bad, good visibilities don't override
     ConditionalMutation cm4 = new ConditionalMutation("99006");
@@ -305,7 +311,7 @@ public class ConditionalWriterTest {
     cm4.put("name", "last", cva, "doe");
     cm4.put("name", "first", cva, "john");
     cm4.put("tx", "seq", cva, "1");
-    Assert.assertEquals(ConditionalWriter.Status.INVISIBLE_VISIBILITY, cw.write(cm4).status);
+    Assert.assertEquals(Status.INVISIBLE_VISIBILITY, cw.write(cm4).getStatus());
     
     ConditionalMutation cm5 = new ConditionalMutation("99006");
     cm5.putCondition("tx", "seq", cvb, "1");
@@ -313,7 +319,7 @@ public class ConditionalWriterTest {
     cm5.put("name", "last", cva, "doe");
     cm5.put("name", "first", cva, "john");
     cm5.put("tx", "seq", cva, "1");
-    Assert.assertEquals(ConditionalWriter.Status.INVISIBLE_VISIBILITY, cw.write(cm5).status);
+    Assert.assertEquals(Status.INVISIBLE_VISIBILITY, cw.write(cm5).getStatus());
 
     ConditionalMutation cm6 = new ConditionalMutation("99006");
     cm6.putCondition("tx", "seq", cvb, "1");
@@ -321,7 +327,7 @@ public class ConditionalWriterTest {
     cm6.put("name", "last", cva, "doe");
     cm6.put("name", "first", cva, "john");
     cm6.put("tx", "seq", cva, "1");
-    Assert.assertEquals(ConditionalWriter.Status.INVISIBLE_VISIBILITY, cw.write(cm6).status);
+    Assert.assertEquals(Status.INVISIBLE_VISIBILITY, cw.write(cm6).getStatus());
 
     ConditionalMutation cm7 = new ConditionalMutation("99006");
     cm7.putConditionAbsent("tx", "seq", cvb);
@@ -329,7 +335,7 @@ public class ConditionalWriterTest {
     cm7.put("name", "last", cva, "doe");
     cm7.put("name", "first", cva, "john");
     cm7.put("tx", "seq", cva, "1");
-    Assert.assertEquals(ConditionalWriter.Status.INVISIBLE_VISIBILITY, cw.write(cm7).status);
+    Assert.assertEquals(Status.INVISIBLE_VISIBILITY, cw.write(cm7).getStatus());
   }
   
   @Test
@@ -352,14 +358,14 @@ public class ConditionalWriterTest {
     cm0.putConditionAbsent("tx", "seq", new ColumnVisibility());
     cm0.put("tx", "seq", "1");
     
-    Assert.assertEquals(ConditionalWriter.Status.VIOLATED, cw.write(cm0).status);
+    Assert.assertEquals(Status.VIOLATED, cw.write(cm0).getStatus());
     Assert.assertFalse(scanner.iterator().hasNext());
     
     ConditionalMutation cm1 = new ConditionalMutation("99006");
     cm1.putConditionAbsent("tx", "seq", new ColumnVisibility());
     cm1.put("tx", "seq", "1");
     
-    Assert.assertEquals(ConditionalWriter.Status.ACCEPTED, cw.write(cm1).status);
+    Assert.assertEquals(Status.ACCEPTED, cw.write(cm1).getStatus());
     Assert.assertTrue(scanner.iterator().hasNext());
 
   }
@@ -398,12 +404,12 @@ public class ConditionalWriterTest {
     ConditionalMutation cm0 = new ConditionalMutation("ACCUMULO-1000");
     cm0.putCondition("count", "comments", new ColumnVisibility(), "3");
     cm0.put("count", "comments", "1");
-    Assert.assertEquals(ConditionalWriter.Status.REJECTED, cw.write(cm0).status);
+    Assert.assertEquals(Status.REJECTED, cw.write(cm0).getStatus());
     Assert.assertEquals("3", scanner.iterator().next().getValue().toString());
     
     cw.addScanIterator(iterConfig);
     
-    Assert.assertEquals(ConditionalWriter.Status.ACCEPTED, cw.write(cm0).status);
+    Assert.assertEquals(Status.ACCEPTED, cw.write(cm0).getStatus());
     Assert.assertEquals("4", scanner.iterator().next().getValue().toString());
     
     if (System.currentTimeMillis() % 2 == 0)
@@ -414,7 +420,7 @@ public class ConditionalWriterTest {
     ConditionalMutation cm1 = new ConditionalMutation("ACCUMULO-1000");
     cm1.putCondition("count", "comments", new ColumnVisibility(), "4");
     cm1.put("count", "comments", "1");
-    Assert.assertEquals(ConditionalWriter.Status.REJECTED, cw.write(cm1).status);
+    Assert.assertEquals(Status.REJECTED, cw.write(cm1).getStatus());
     Assert.assertEquals("4", scanner.iterator().next().getValue().toString());
   }
 
@@ -455,11 +461,11 @@ public class ConditionalWriterTest {
     mutations.add(cm2);
     
     ConditionalWriter cw = new ConditionalWriterImpl(table, conn, new Authorizations("A"));
-    Iterator<ConditionalWriter.Result> results = cw.write(mutations.iterator());
+    Iterator<Result> results = cw.write(mutations.iterator());
     int count = 0;
     while (results.hasNext()) {
-      ConditionalWriter.Result result = results.next();
-      Assert.assertEquals(ConditionalWriter.Status.ACCEPTED, result.status);
+      Result result = results.next();
+      Assert.assertEquals(Status.ACCEPTED, result.getStatus());
       count++;
     }
     
@@ -502,12 +508,12 @@ public class ConditionalWriterTest {
     int accepted = 0;
     int rejected = 0;
     while (results.hasNext()) {
-      ConditionalWriter.Result result = results.next();
-      if (new String(result.mutation.getRow()).equals("99006")) {
-        Assert.assertEquals(ConditionalWriter.Status.ACCEPTED, result.status);
+      Result result = results.next();
+      if (new String(result.getMutation().getRow()).equals("99006")) {
+        Assert.assertEquals(Status.ACCEPTED, result.getStatus());
         accepted++;
       } else {
-        Assert.assertEquals(ConditionalWriter.Status.REJECTED, result.status);
+        Assert.assertEquals(Status.REJECTED, result.getStatus());
         rejected++;
       }
     }
@@ -576,19 +582,19 @@ public class ConditionalWriterTest {
     mutations.add(cm3);
 
     ConditionalWriter cw = new ConditionalWriterImpl(table, conn, new Authorizations("A"));
-    Iterator<ConditionalWriter.Result> results = cw.write(mutations.iterator());
+    Iterator<Result> results = cw.write(mutations.iterator());
     HashSet<String> rows = new HashSet<String>();
     while (results.hasNext()) {
-      ConditionalWriter.Result result = results.next();
-      String row = new String(result.mutation.getRow());
+      Result result = results.next();
+      String row = new String(result.getMutation().getRow());
       if (row.equals("19059")) {
-        Assert.assertEquals(ConditionalWriter.Status.ACCEPTED, result.status);
+        Assert.assertEquals(Status.ACCEPTED, result.getStatus());
       } else if (row.equals("59056")) {
-        Assert.assertEquals(ConditionalWriter.Status.INVISIBLE_VISIBILITY, result.status);
+        Assert.assertEquals(Status.INVISIBLE_VISIBILITY, result.getStatus());
       } else if (row.equals("99006")) {
-        Assert.assertEquals(ConditionalWriter.Status.VIOLATED, result.status);
+        Assert.assertEquals(Status.VIOLATED, result.getStatus());
       } else if (row.equals("90909")) {
-        Assert.assertEquals(ConditionalWriter.Status.REJECTED, result.status);
+        Assert.assertEquals(Status.REJECTED, result.getStatus());
       }
       rows.add(row);
     }

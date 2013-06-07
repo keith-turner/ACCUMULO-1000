@@ -1,3 +1,7 @@
+package core.data;
+
+import org.apache.accumulo.core.data.ArrayByteSequence;
+import org.apache.accumulo.core.data.ByteSequence;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -15,20 +19,18 @@
  * limitations under the License.
  */
 
-import org.apache.accumulo.core.data.ArrayByteSequence;
-import org.apache.accumulo.core.data.ByteSequence;
 
 /**
  * 
  */
 public class ColumnCondition {
   
-  ByteSequence cf;
-  ByteSequence cq;
-  ByteSequence cv;
-  ByteSequence val;
-  long ts;
-  boolean hasTs;
+  private ByteSequence cf;
+  private ByteSequence cq;
+  private ByteSequence cv;
+  private ByteSequence val;
+  private long ts;
+  private boolean hasTs;
   
   public ColumnCondition(byte[] cf, byte[] cq, byte[] cv, byte[] val) {
     this.cf = new ArrayByteSequence(cf);
@@ -55,15 +57,33 @@ public class ColumnCondition {
   public boolean equals(Object o) {
     if (o instanceof ColumnCondition) {
       ColumnCondition occ = (ColumnCondition) o;
-      
       return occ.cf.equals(cf) && occ.cq.equals(cq) && occ.cv.equals(cv) && (!hasTs || !occ.hasTs || ts == occ.ts);
     }
-    
     return false;
   }
   
   public String toString() {
     return cf + " " + cq + " " + cv + " " + val + " " + hasTs;
+  }
+  
+  public ByteSequence getColumnFamily() {
+    return cf;
+  }
+  
+  public ByteSequence getColumnQualifier() {
+    return cq;
+  }
+  
+  public ByteSequence getColumnVisibility() {
+    return cv;
+  }
+
+  public ByteSequence getValue() {
+    return val;
+  }
+
+  public long getTimestamp() {
+    return ts;
   }
 
 }

@@ -15,23 +15,35 @@
  * limitations under the License.
  */
 
+package core.client;
+
 import java.util.Iterator;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.accumulo.core.client.IteratorSetting;
+
+import core.data.ConditionalMutation;
 
 /**
  * 
  */
 public interface ConditionalWriter {
   public static class Result {
-
-    Status status;
-    ConditionalMutation mutation;
     
-    Result(Status s, ConditionalMutation m) {
+    private Status status;
+    private ConditionalMutation mutation;
+    
+    public Result(Status s, ConditionalMutation m) {
       this.status = s;
       this.mutation = m;
+    }
+    
+    public Status getStatus() {
+      return status;
+    }
+    
+    public ConditionalMutation getMutation() {
+      return mutation;
     }
   }
   
@@ -51,7 +63,7 @@ public interface ConditionalWriter {
     // mutations failing in some way like timing out
     IGNORED
   }
-  
+
   public abstract Iterator<Result> write(Iterator<ConditionalMutation> mutations);
   
   public abstract Result write(ConditionalMutation mutation);

@@ -1,3 +1,4 @@
+package core.client.impl;
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -43,6 +44,10 @@ import org.apache.accumulo.core.security.VisibilityParseException;
 import org.apache.accumulo.core.util.BadArgumentException;
 import org.apache.commons.collections.map.LRUMap;
 import org.apache.hadoop.io.Text;
+
+import core.client.ConditionalWriter;
+import core.data.ColumnCondition;
+import core.data.ConditionalMutation;
 
 /**
  * 
@@ -96,13 +101,13 @@ public class ConditionalWriterImpl implements ConditionalWriter {
         scanner.clearColumns();
         for (ColumnCondition cc : conditions) {
           
-          if (!isVisible(cc.cv)) {
+          if (!isVisible(cc.getColumnVisibility())) {
             results.add(new Result(Status.INVISIBLE_VISIBILITY, cm));
             continue mloop;
           }
 
-          scanner.fetchColumn(new Text(cc.cf.toArray()), new Text(cc.cq.toArray()));
-          condtionMap.put(cc, cc.val == null ? absentVal : cc.val);
+          scanner.fetchColumn(new Text(cc.getColumnFamily().toArray()), new Text(cc.getColumnQualifier().toArray()));
+          condtionMap.put(cc, cc.getValue() == null ? absentVal : cc.getValue());
         }
 
         for (Entry<Key,Value> entry : scanner) {
