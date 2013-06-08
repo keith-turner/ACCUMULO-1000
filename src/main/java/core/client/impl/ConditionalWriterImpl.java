@@ -17,9 +17,7 @@ package core.client.impl;
  */
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
@@ -31,7 +29,6 @@ import org.apache.accumulo.core.client.Connector;
 import org.apache.accumulo.core.client.IteratorSetting;
 import org.apache.accumulo.core.client.MutationsRejectedException;
 import org.apache.accumulo.core.client.Scanner;
-import org.apache.accumulo.core.client.impl.ScannerOptions;
 import org.apache.accumulo.core.data.ArrayByteSequence;
 import org.apache.accumulo.core.data.ByteSequence;
 import org.apache.accumulo.core.data.Key;
@@ -46,7 +43,7 @@ import org.apache.commons.collections.map.LRUMap;
 import org.apache.hadoop.io.Text;
 
 import core.client.ConditionalWriter;
-import core.data.ColumnCondition;
+import core.data.Condition;
 import core.data.ConditionalMutation;
 
 /**
@@ -54,18 +51,11 @@ import core.data.ConditionalMutation;
  */
 public class ConditionalWriterImpl implements ConditionalWriter {
   
-  private static class ScanOpts extends ScannerOptions {
-    public void configure(Scanner scanner) {
-      setOptions((ScannerOptions) scanner, this);
-    }
-  }
-
   private Connector conn;
   private String table;
   private Authorizations auths;
   private VisibilityEvaluator ve;
   private LRUMap cache;
-  private ScanOpts scanOpts = new ScanOpts() {};
   
   public ConditionalWriterImpl(String table, Connector conn, Authorizations auths) {
     this.conn = conn;
@@ -78,8 +68,6 @@ public class ConditionalWriterImpl implements ConditionalWriter {
   
   public Iterator<Result> write(Iterator<ConditionalMutation> mutations) {
     
-    ByteSequence absentVal = new ArrayByteSequence(new byte[0]);
-
     try {
       Scanner scanner = conn.createScanner(table, auths);
       BatchWriter bw = conn.createBatchWriter(table, new BatchWriterConfig());
@@ -91,65 +79,50 @@ public class ConditionalWriterImpl implements ConditionalWriter {
         
         byte[] row = cm.getRow();
         
-        scanOpts.configure(scanner);
-
         scanner.setRange(new Range(new Text(row)));
         
-        HashMap<ColumnCondition,ByteSequence> condtionMap = new HashMap<ColumnCondition,ByteSequence>();
-        
-        List<ColumnCondition> conditions = cm.getConditions();
-        scanner.clearColumns();
-        for (ColumnCondition cc : conditions) {
+        List<Condition> conditions = cm.getConditions();
+
+        for (Condition cc : conditions) {
           
-          if (!isVisible(cc.getColumnVisibility())) {
+          if (!isVisible(cc.getVisibility())) {
             results.add(new Result(Status.INVISIBLE_VISIBILITY, cm));
             continue mloop;
           }
 
-          scanner.fetchColumn(new Text(cc.getColumnFamily().toArray()), new Text(cc.getColumnQualifier().toArray()));
-          condtionMap.put(cc, cc.getValue() == null ? absentVal : cc.getValue());
-        }
+          scanner.clearColumns();
+          scanner.fetchColumn(new Text(cc.getFamily().toArray()), new Text(cc.getQualifier().toArray()));
+          scanner.clearScanIterators();
+          for (IteratorSetting is : cc.getIterators()) {
+            scanner.addScanIterator(is);
+          }
 
-        for (Entry<Key,Value> entry : scanner) {
-          Key k = entry.getKey();
+          Value val = null;
           
-          ColumnCondition cc = new ColumnCondition(k.getColumnFamilyData().toArray(), k.getColumnQualifierData().toArray(), k.getColumnVisibilityData()
-              .toArray(), k.getTimestamp(), new byte[0]);
-          
-          ByteSequence val = condtionMap.remove(cc);
-          
-          if (val != null) {
-            if (val == absentVal || !Arrays.equals(entry.getValue().get(), val.toArray())) {
-              results.add(new Result(Status.REJECTED, cm));
-              continue mloop;
+          for (Entry<Key,Value> entry : scanner) {
+            Key key = entry.getKey();
+            if (key.getColumnVisibilityData().equals(cc.getVisibility()) && (cc.getTimestamp() == null || cc.getTimestamp() == key.getTimestamp())) {
+              val = entry.getValue();
+              break;
             }
           }
-        }
-
-        int ac = 0;
-        
-        for (ByteSequence bs : condtionMap.values()) {
-          if (bs == absentVal) {
-            ac++;
-          }
-        }
-        
-        if (condtionMap.size() != ac) {
-          results.add(new Result(Status.REJECTED, cm));
-        } else {
-          try {
-            bw.addMutation(cm);
-            bw.close();
-            results.add(new Result(Status.ACCEPTED, cm));
-          } catch (MutationsRejectedException mre) {
-            results.add(new Result(Status.VIOLATED, cm));
-            continue mloop;
-          } finally {
-            bw.close();
-            bw = conn.createBatchWriter(table, new BatchWriterConfig());
-          }
           
+          if ((val == null ^ cc.getValue() == null) || (val != null && !cc.getValue().equals(new ArrayByteSequence(val.get())))) {
+            results.add(new Result(Status.REJECTED, cm));
+            continue mloop;
+          }
+        }
 
+        try {
+          bw.addMutation(cm);
+          bw.close();
+          results.add(new Result(Status.ACCEPTED, cm));
+        } catch (MutationsRejectedException mre) {
+          results.add(new Result(Status.VIOLATED, cm));
+          continue mloop;
+        } finally {
+          bw.close();
+          bw = conn.createBatchWriter(table, new BatchWriterConfig());
         }
       }
 
@@ -185,28 +158,12 @@ public class ConditionalWriterImpl implements ConditionalWriter {
     return write(Collections.singleton(mutation).iterator()).next();
   }
   
-  public void addScanIterator(IteratorSetting cfg) {
-    scanOpts.addScanIterator(cfg);
-  }
-  
-  public void removeScanIterator(String iteratorName) {
-    scanOpts.removeScanIterator(iteratorName);
-  }
-  
-  public void updateScanIteratorOption(String iteratorName, String key, String value) {
-    scanOpts.updateScanIteratorOption(iteratorName, key, value);
-  }
-  
-  public void clearScanIterators() {
-    scanOpts.clearScanIterators();
-  }
-  
   public void setTimeout(long timeOut, TimeUnit timeUnit) {
-    scanOpts.setTimeout(timeOut, timeUnit);
+    throw new UnsupportedOperationException();
   }
   
   public long getTimeout(TimeUnit timeUnit) {
-    return scanOpts.getTimeout(timeUnit);
+    throw new UnsupportedOperationException();
   }
   
 }

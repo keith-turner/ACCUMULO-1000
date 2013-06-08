@@ -53,6 +53,7 @@ import org.junit.rules.TemporaryFolder;
 import core.client.ConditionalWriter.Result;
 import core.client.ConditionalWriter.Status;
 import core.client.impl.ConditionalWriterImpl;
+import core.data.Condition;
 import core.data.ConditionalMutation;
 
 /**
@@ -83,7 +84,7 @@ public class ConditionalWriterTest {
     
     // mutation conditional on column tx:seq not exiting
     ConditionalMutation cm0 = new ConditionalMutation("99006");
-    cm0.putConditionAbsent("tx", "seq", new ColumnVisibility());
+    cm0.addCondition(new Condition("tx", "seq"));
     cm0.put("name", "last", "doe");
     cm0.put("name", "first", "john");
     cm0.put("tx", "seq", "1");
@@ -92,37 +93,37 @@ public class ConditionalWriterTest {
 
     // mutation conditional on column tx:seq being 1
     ConditionalMutation cm1 = new ConditionalMutation("99006");
-    cm1.putCondition("tx", "seq", new ColumnVisibility(), "1");
+    cm1.addCondition(new Condition("tx", "seq").setValue("1"));
     cm1.put("name", "last", "Doe");
     cm1.put("tx", "seq", "2");
     Assert.assertEquals(Status.ACCEPTED, cw.write(cm1).getStatus());
 
     // test condition where value differs
     ConditionalMutation cm2 = new ConditionalMutation("99006");
-    cm2.putCondition("tx", "seq", new ColumnVisibility(), "1");
+    cm2.addCondition(new Condition("tx", "seq").setValue("1"));
     cm2.put("name", "last", "DOE");
     cm2.put("tx", "seq", "2");
     Assert.assertEquals(Status.REJECTED, cw.write(cm2).getStatus());
     
     // test condition where column does not exists
     ConditionalMutation cm3 = new ConditionalMutation("99006");
-    cm3.putCondition("txtypo", "seq", new ColumnVisibility(), "1"); // does not exists
+    cm3.addCondition(new Condition("txtypo", "seq").setValue("1")); // does not exists
     cm3.put("name", "last", "deo");
     cm3.put("tx", "seq", "2");
     Assert.assertEquals(Status.REJECTED, cw.write(cm3).getStatus());
     
     // test two conditions, where one should fail
     ConditionalMutation cm4 = new ConditionalMutation("99006");
-    cm4.putCondition("tx", "seq", new ColumnVisibility(), "2");
-    cm4.putCondition("name", "last", new ColumnVisibility(), "doe");
+    cm4.addCondition(new Condition("tx", "seq").setValue("2"));
+    cm4.addCondition(new Condition("name", "last").setValue("doe"));
     cm4.put("name", "last", "deo");
     cm4.put("tx", "seq", "3");
     Assert.assertEquals(Status.REJECTED, cw.write(cm4).getStatus());
 
     // test two conditions, where one should fail
     ConditionalMutation cm5 = new ConditionalMutation("99006");
-    cm5.putCondition("tx", "seq", new ColumnVisibility(), "1");
-    cm5.putCondition("name", "last", new ColumnVisibility(), "Doe");
+    cm5.addCondition(new Condition("tx", "seq").setValue("1"));
+    cm5.addCondition(new Condition("name", "last").setValue("Doe"));
     cm5.put("name", "last", "deo");
     cm5.put("tx", "seq", "3");
     Assert.assertEquals(Status.REJECTED, cw.write(cm5).getStatus());
@@ -135,8 +136,8 @@ public class ConditionalWriterTest {
 
     // test w/ two conditions that are met
     ConditionalMutation cm6 = new ConditionalMutation("99006");
-    cm6.putCondition("tx", "seq", new ColumnVisibility(), "2");
-    cm6.putCondition("name", "last", new ColumnVisibility(), "Doe");
+    cm6.addCondition(new Condition("tx", "seq").setValue("2"));
+    cm6.addCondition(new Condition("name", "last").setValue("Doe"));
     cm6.put("name", "last", "DOE");
     cm6.put("tx", "seq", "3");
     Assert.assertEquals(Status.ACCEPTED, cw.write(cm6).getStatus());
@@ -145,7 +146,7 @@ public class ConditionalWriterTest {
     
     // test a conditional mutation that deletes
     ConditionalMutation cm7 = new ConditionalMutation("99006");
-    cm7.putCondition("tx", "seq", new ColumnVisibility(), "3");
+    cm7.addCondition(new Condition("tx", "seq").setValue("3"));
     cm7.putDelete("name", "last");
     cm7.putDelete("name", "first");
     cm7.putDelete("tx", "seq");
@@ -179,7 +180,7 @@ public class ConditionalWriterTest {
     ColumnVisibility cvb = new ColumnVisibility("B");
     
     ConditionalMutation cm0 = new ConditionalMutation("99006");
-    cm0.putConditionAbsent("tx", "seq", cva);
+    cm0.addCondition(new Condition("tx", "seq").setVisibility(cva));
     cm0.put("name", "last", cva, "doe");
     cm0.put("name", "first", cva, "john");
     cm0.put("tx", "seq", cva, "1");
@@ -195,7 +196,7 @@ public class ConditionalWriterTest {
     
     // test wrong colf
     ConditionalMutation cm1 = new ConditionalMutation("99006");
-    cm1.putCondition("txA", "seq", cva, "1");
+    cm1.addCondition(new Condition("txA", "seq").setVisibility(cva).setValue("1"));
     cm1.put("name", "last", cva, "Doe");
     cm1.put("name", "first", cva, "John");
     cm1.put("tx", "seq", cva, "2");
@@ -203,7 +204,7 @@ public class ConditionalWriterTest {
     
     // test wrong colq
     ConditionalMutation cm2 = new ConditionalMutation("99006");
-    cm2.putCondition("tx", "seqA", cva, "1");
+    cm2.addCondition(new Condition("tx", "seqA").setVisibility(cva).setValue("1"));
     cm2.put("name", "last", cva, "Doe");
     cm2.put("name", "first", cva, "John");
     cm2.put("tx", "seq", cva, "2");
@@ -211,7 +212,7 @@ public class ConditionalWriterTest {
     
     // test wrong colv
     ConditionalMutation cm3 = new ConditionalMutation("99006");
-    cm3.putCondition("tx", "seq", cvb, "1");
+    cm3.addCondition(new Condition("tx", "seq").setVisibility(cvb).setValue("1"));
     cm3.put("name", "last", cva, "Doe");
     cm3.put("name", "first", cva, "John");
     cm3.put("tx", "seq", cva, "2");
@@ -219,7 +220,7 @@ public class ConditionalWriterTest {
 
     // test wrong timestamp
     ConditionalMutation cm4 = new ConditionalMutation("99006");
-    cm4.putCondition("tx", "seq", cva, ts + 1, "1");
+    cm4.addCondition(new Condition("tx", "seq").setVisibility(cva).setTimestamp(ts + 1).setValue("1"));
     cm4.put("name", "last", cva, "Doe");
     cm4.put("name", "first", cva, "John");
     cm4.put("tx", "seq", cva, "2");
@@ -227,7 +228,7 @@ public class ConditionalWriterTest {
     
     // test wrong timestamp
     ConditionalMutation cm5 = new ConditionalMutation("99006");
-    cm5.putCondition("tx", "seq", cva, ts - 1, "1");
+    cm5.addCondition(new Condition("tx", "seq").setVisibility(cva).setTimestamp(ts - 1).setValue("1"));
     cm5.put("name", "last", cva, "Doe");
     cm5.put("name", "first", cva, "John");
     cm5.put("tx", "seq", cva, "2");
@@ -239,7 +240,7 @@ public class ConditionalWriterTest {
 
     // set all columns correctly
     ConditionalMutation cm6 = new ConditionalMutation("99006");
-    cm6.putCondition("tx", "seq", cva, ts, "1");
+    cm6.addCondition(new Condition("tx", "seq").setVisibility(cva).setTimestamp(ts).setValue("1"));
     cm6.put("name", "last", cva, "Doe");
     cm6.put("name", "first", cva, "John");
     cm6.put("tx", "seq", cva, "2");
@@ -276,14 +277,14 @@ public class ConditionalWriterTest {
     
     // User has authorization, but didn't include it in the writer
     ConditionalMutation cm0 = new ConditionalMutation("99006");
-    cm0.putConditionAbsent("tx", "seq", cvb);
+    cm0.addCondition(new Condition("tx", "seq").setVisibility(cvb));
     cm0.put("name", "last", cva, "doe");
     cm0.put("name", "first", cva, "john");
     cm0.put("tx", "seq", cva, "1");
     Assert.assertEquals(Status.INVISIBLE_VISIBILITY, cw.write(cm0).getStatus());
     
     ConditionalMutation cm1 = new ConditionalMutation("99006");
-    cm1.putCondition("tx", "seq", cvb, "1");
+    cm1.addCondition(new Condition("tx", "seq").setVisibility(cvb).setValue("1"));
     cm1.put("name", "last", cva, "doe");
     cm1.put("name", "first", cva, "john");
     cm1.put("tx", "seq", cva, "1");
@@ -291,14 +292,14 @@ public class ConditionalWriterTest {
 
     // User does not have the authorization
     ConditionalMutation cm2 = new ConditionalMutation("99006");
-    cm2.putConditionAbsent("tx", "seq", cvc);
+    cm2.addCondition(new Condition("tx", "seq").setVisibility(cvc));
     cm2.put("name", "last", cva, "doe");
     cm2.put("name", "first", cva, "john");
     cm2.put("tx", "seq", cva, "1");
     Assert.assertEquals(Status.INVISIBLE_VISIBILITY, cw.write(cm2).getStatus());
     
     ConditionalMutation cm3 = new ConditionalMutation("99006");
-    cm3.putCondition("tx", "seq", cvc, "1");
+    cm3.addCondition(new Condition("tx", "seq").setVisibility(cvc).setValue("1"));
     cm3.put("name", "last", cva, "doe");
     cm3.put("name", "first", cva, "john");
     cm3.put("tx", "seq", cva, "1");
@@ -306,32 +307,32 @@ public class ConditionalWriterTest {
 
     // if any visibility is bad, good visibilities don't override
     ConditionalMutation cm4 = new ConditionalMutation("99006");
-    cm4.putConditionAbsent("tx", "seq", cvb);
-    cm4.putConditionAbsent("tx", "seq", cva);
+    cm4.addCondition(new Condition("tx", "seq").setVisibility(cvb));
+    cm4.addCondition(new Condition("tx", "seq").setVisibility(cva));
     cm4.put("name", "last", cva, "doe");
     cm4.put("name", "first", cva, "john");
     cm4.put("tx", "seq", cva, "1");
     Assert.assertEquals(Status.INVISIBLE_VISIBILITY, cw.write(cm4).getStatus());
     
     ConditionalMutation cm5 = new ConditionalMutation("99006");
-    cm5.putCondition("tx", "seq", cvb, "1");
-    cm5.putCondition("tx", "seq", cva, "1");
+    cm5.addCondition(new Condition("tx", "seq").setVisibility(cvb).setValue("1"));
+    cm5.addCondition(new Condition("tx", "seq").setVisibility(cva).setValue("1"));
     cm5.put("name", "last", cva, "doe");
     cm5.put("name", "first", cva, "john");
     cm5.put("tx", "seq", cva, "1");
     Assert.assertEquals(Status.INVISIBLE_VISIBILITY, cw.write(cm5).getStatus());
 
     ConditionalMutation cm6 = new ConditionalMutation("99006");
-    cm6.putCondition("tx", "seq", cvb, "1");
-    cm6.putConditionAbsent("tx", "seq", cva);
+    cm6.addCondition(new Condition("tx", "seq").setVisibility(cvb).setValue("1"));
+    cm6.addCondition(new Condition("tx", "seq").setVisibility(cva));
     cm6.put("name", "last", cva, "doe");
     cm6.put("name", "first", cva, "john");
     cm6.put("tx", "seq", cva, "1");
     Assert.assertEquals(Status.INVISIBLE_VISIBILITY, cw.write(cm6).getStatus());
 
     ConditionalMutation cm7 = new ConditionalMutation("99006");
-    cm7.putConditionAbsent("tx", "seq", cvb);
-    cm7.putCondition("tx", "seq", cva, "1");
+    cm7.addCondition(new Condition("tx", "seq").setVisibility(cvb));
+    cm7.addCondition(new Condition("tx", "seq").setVisibility(cva).setValue("1"));
     cm7.put("name", "last", cva, "doe");
     cm7.put("name", "first", cva, "john");
     cm7.put("tx", "seq", cva, "1");
@@ -355,14 +356,14 @@ public class ConditionalWriterTest {
     ConditionalWriter cw = new ConditionalWriterImpl(table + "_clone", conn, new Authorizations());
 
     ConditionalMutation cm0 = new ConditionalMutation("99006+");
-    cm0.putConditionAbsent("tx", "seq", new ColumnVisibility());
+    cm0.addCondition(new Condition("tx", "seq"));
     cm0.put("tx", "seq", "1");
     
     Assert.assertEquals(Status.VIOLATED, cw.write(cm0).getStatus());
     Assert.assertFalse(scanner.iterator().hasNext());
     
     ConditionalMutation cm1 = new ConditionalMutation("99006");
-    cm1.putConditionAbsent("tx", "seq", new ColumnVisibility());
+    cm1.addCondition(new Condition("tx", "seq"));
     cm1.put("tx", "seq", "1");
     
     Assert.assertEquals(Status.ACCEPTED, cw.write(cm1).getStatus());
@@ -402,26 +403,24 @@ public class ConditionalWriterTest {
     ConditionalWriter cw = new ConditionalWriterImpl(table, conn, new Authorizations());
     
     ConditionalMutation cm0 = new ConditionalMutation("ACCUMULO-1000");
-    cm0.putCondition("count", "comments", new ColumnVisibility(), "3");
+    cm0.addCondition(new Condition("count", "comments").setValue("3"));
     cm0.put("count", "comments", "1");
     Assert.assertEquals(Status.REJECTED, cw.write(cm0).getStatus());
     Assert.assertEquals("3", scanner.iterator().next().getValue().toString());
     
-    cw.addScanIterator(iterConfig);
-    
-    Assert.assertEquals(Status.ACCEPTED, cw.write(cm0).getStatus());
+    ConditionalMutation cm1 = new ConditionalMutation("ACCUMULO-1000");
+    cm1.addCondition(new Condition("count", "comments").setIterators(iterConfig).setValue("3"));
+    cm1.put("count", "comments", "1");
+    Assert.assertEquals(Status.ACCEPTED, cw.write(cm1).getStatus());
     Assert.assertEquals("4", scanner.iterator().next().getValue().toString());
     
-    if (System.currentTimeMillis() % 2 == 0)
-      cw.removeScanIterator(iterConfig.getName());
-    else
-      cw.clearScanIterators();
-
-    ConditionalMutation cm1 = new ConditionalMutation("ACCUMULO-1000");
-    cm1.putCondition("count", "comments", new ColumnVisibility(), "4");
-    cm1.put("count", "comments", "1");
+    ConditionalMutation cm2 = new ConditionalMutation("ACCUMULO-1000");
+    cm2.addCondition(new Condition("count", "comments").setValue("4"));
+    cm2.put("count", "comments", "1");
     Assert.assertEquals(Status.REJECTED, cw.write(cm1).getStatus());
     Assert.assertEquals("4", scanner.iterator().next().getValue().toString());
+    
+    // TODO test conditions with different iterators
   }
 
   @Test
@@ -440,21 +439,21 @@ public class ConditionalWriterTest {
     ArrayList<ConditionalMutation> mutations = new ArrayList<ConditionalMutation>();
     
     ConditionalMutation cm0 = new ConditionalMutation("99006");
-    cm0.putConditionAbsent("tx", "seq", cvab);
+    cm0.addCondition(new Condition("tx", "seq").setVisibility(cvab));
     cm0.put("name", "last", cvab, "doe");
     cm0.put("name", "first", cvab, "john");
     cm0.put("tx", "seq", cvab, "1");
     mutations.add(cm0);
     
     ConditionalMutation cm1 = new ConditionalMutation("59056");
-    cm1.putConditionAbsent("tx", "seq", cvab);
+    cm1.addCondition(new Condition("tx", "seq").setVisibility(cvab));
     cm1.put("name", "last", cvab, "doe");
     cm1.put("name", "first", cvab, "jane");
     cm1.put("tx", "seq", cvab, "1");
     mutations.add(cm1);
     
     ConditionalMutation cm2 = new ConditionalMutation("19059");
-    cm2.putConditionAbsent("tx", "seq", cvab);
+    cm2.addCondition(new Condition("tx", "seq").setVisibility(cvab));
     cm2.put("name", "last", cvab, "doe");
     cm2.put("name", "first", cvab, "jack");
     cm2.put("tx", "seq", cvab, "1");
@@ -487,19 +486,19 @@ public class ConditionalWriterTest {
     mutations.clear();
 
     ConditionalMutation cm3 = new ConditionalMutation("99006");
-    cm3.putCondition("tx", "seq", cvab, "1");
+    cm3.addCondition(new Condition("tx", "seq").setVisibility(cvab).setValue("1"));
     cm3.put("name", "last", cvab, "Doe");
     cm3.put("tx", "seq", cvab, "2");
     mutations.add(cm3);
     
     ConditionalMutation cm4 = new ConditionalMutation("59056");
-    cm4.putConditionAbsent("tx", "seq", cvab);
+    cm4.addCondition(new Condition("tx", "seq").setVisibility(cvab));
     cm4.put("name", "last", cvab, "Doe");
     cm4.put("tx", "seq", cvab, "1");
     mutations.add(cm4);
     
     ConditionalMutation cm5 = new ConditionalMutation("19059");
-    cm5.putCondition("tx", "seq", cvab, "2");
+    cm5.addCondition(new Condition("tx", "seq").setVisibility(cvab).setValue("2"));
     cm5.put("name", "last", cvab, "Doe");
     cm5.put("tx", "seq", cvab, "3");
     mutations.add(cm5);
@@ -554,28 +553,28 @@ public class ConditionalWriterTest {
     ArrayList<ConditionalMutation> mutations = new ArrayList<ConditionalMutation>();
     
     ConditionalMutation cm0 = new ConditionalMutation("99006");
-    cm0.putConditionAbsent("tx", "seq", cvaob);
+    cm0.addCondition(new Condition("tx", "seq").setVisibility(cvaob));
     cm0.put("name+", "last", cvaob, "doe");
     cm0.put("name", "first", cvaob, "john");
     cm0.put("tx", "seq", cvaob, "1");
     mutations.add(cm0);
     
     ConditionalMutation cm1 = new ConditionalMutation("59056");
-    cm1.putConditionAbsent("tx", "seq", cvaab);
+    cm1.addCondition(new Condition("tx", "seq").setVisibility(cvaab));
     cm1.put("name", "last", cvaab, "doe");
     cm1.put("name", "first", cvaab, "jane");
     cm1.put("tx", "seq", cvaab, "1");
     mutations.add(cm1);
     
     ConditionalMutation cm2 = new ConditionalMutation("19059");
-    cm2.putConditionAbsent("tx", "seq", cvaob);
+    cm2.addCondition(new Condition("tx", "seq").setVisibility(cvaob));
     cm2.put("name", "last", cvaob, "doe");
     cm2.put("name", "first", cvaob, "jack");
     cm2.put("tx", "seq", cvaob, "1");
     mutations.add(cm2);
     
     ConditionalMutation cm3 = new ConditionalMutation("90909");
-    cm3.putCondition("tx", "seq", cvaob, "1");
+    cm3.addCondition(new Condition("tx", "seq").setVisibility(cvaob).setValue("1"));
     cm3.put("name", "last", cvaob, "doe");
     cm3.put("name", "first", cvaob, "john");
     cm3.put("tx", "seq", cvaob, "2");

@@ -21,7 +21,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.accumulo.core.data.Mutation;
-import org.apache.accumulo.core.security.ColumnVisibility;
 import org.apache.accumulo.core.util.ArgumentChecker;
 import org.apache.hadoop.io.Text;
 
@@ -30,7 +29,7 @@ import org.apache.hadoop.io.Text;
  */
 public class ConditionalMutation extends Mutation {
   
-  private ArrayList<ColumnCondition> conditions = new ArrayList<ColumnCondition>();
+  private ArrayList<Condition> conditions = new ArrayList<Condition>();
 
   public ConditionalMutation(byte[] row) {
     this(row, 0, row.length);
@@ -48,27 +47,12 @@ public class ConditionalMutation extends Mutation {
     this(new Text(row.toString()));
   }
   
-  public void putCondition(CharSequence cf, CharSequence cq, ColumnVisibility cv, CharSequence val) {
-    ArgumentChecker.notNull(cf, cq, cv, val);
-    conditions.add(new ColumnCondition(cf.toString().getBytes(), cq.toString().getBytes(), cv.getExpression(), val.toString().getBytes()));
-  }
-  
-  public void putCondition(CharSequence cf, CharSequence cq, ColumnVisibility cv, long ts, CharSequence val) {
-    ArgumentChecker.notNull(cf, cq, cv, val);
-    conditions.add(new ColumnCondition(cf.toString().getBytes(), cq.toString().getBytes(), cv.getExpression(), ts, val.toString().getBytes()));
+  public void addCondition(Condition c) {
+    ArgumentChecker.notNull(c);
+    conditions.add(c);
   }
 
-  public void putConditionAbsent(CharSequence cf, CharSequence cq, ColumnVisibility cv) {
-    ArgumentChecker.notNull(cf, cq, cv);
-    conditions.add(new ColumnCondition(cf.toString().getBytes(), cq.toString().getBytes(), cv.getExpression(), null));
-  }
-  
-  public void putConditionAbsent(CharSequence cf, CharSequence cq, ColumnVisibility cv, long ts) {
-    ArgumentChecker.notNull(cf, cq, cv);
-    conditions.add(new ColumnCondition(cf.toString().getBytes(), cq.toString().getBytes(), cv.getExpression(), ts, null));
-  }
-
-  public List<ColumnCondition> getConditions() {
+  public List<Condition> getConditions() {
     return conditions;
   }
 
