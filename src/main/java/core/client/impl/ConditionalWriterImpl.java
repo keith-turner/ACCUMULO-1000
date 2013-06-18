@@ -80,8 +80,6 @@ public class ConditionalWriterImpl implements ConditionalWriter {
         
         byte[] row = cm.getRow();
         
-        scanner.setRange(new Range(new Text(row)));
-        
         List<Condition> conditions = cm.getConditions();
 
         for (Condition cc : conditions) {
@@ -92,7 +90,15 @@ public class ConditionalWriterImpl implements ConditionalWriter {
           }
 
           scanner.clearColumns();
-          scanner.fetchColumn(new Text(cc.getFamily().toArray()), new Text(cc.getQualifier().toArray()));
+          
+          if (cc.getTimestamp() == null) {
+            scanner.setRange(Range.exact(new Text(row), new Text(cc.getFamily().toArray()), new Text(cc.getQualifier().toArray()), new Text(cc.getVisibility()
+                .toArray())));
+          } else {
+            scanner.setRange(Range.exact(new Text(row), new Text(cc.getFamily().toArray()), new Text(cc.getQualifier().toArray()), new Text(cc.getVisibility()
+                .toArray()), cc.getTimestamp()));
+          }
+
           scanner.clearScanIterators();
           for (IteratorSetting is : cc.getIterators()) {
             scanner.addScanIterator(is);
@@ -101,11 +107,8 @@ public class ConditionalWriterImpl implements ConditionalWriter {
           Value val = null;
           
           for (Entry<Key,Value> entry : scanner) {
-            Key key = entry.getKey();
-            if (key.getColumnVisibilityData().equals(cc.getVisibility()) && (cc.getTimestamp() == null || cc.getTimestamp() == key.getTimestamp())) {
-              val = entry.getValue();
-              break;
-            }
+            val = entry.getValue();
+            break;
           }
           
           if ((val == null ^ cc.getValue() == null) || (val != null && !cc.getValue().equals(new ArrayByteSequence(val.get())))) {
