@@ -44,6 +44,20 @@ public class Condition {
     this.cv = EMPTY;
   }
   
+  public Condition(byte[] cf, byte[] cq) {
+    ArgumentChecker.notNull(cf, cq);
+    this.cf = new ArrayByteSequence(cf);
+    this.cq = new ArrayByteSequence(cq);
+    this.cv = EMPTY;
+  }
+
+  public Condition(ByteSequence cf, ByteSequence cq) {
+    ArgumentChecker.notNull(cf, cq);
+    this.cf = cf;
+    this.cq = cq;
+    this.cv = EMPTY;
+  }
+
   public ByteSequence getFamily() {
     return cf;
   }
@@ -64,6 +78,12 @@ public class Condition {
   public Condition setValue(CharSequence value) {
     ArgumentChecker.notNull(value);
     this.val = new ArrayByteSequence(value.toString().getBytes(Constants.UTF8));
+    return this;
+  }
+
+  public Condition setValue(byte[] value) {
+    ArgumentChecker.notNull(value);
+    this.val = new ArrayByteSequence(value);
     return this;
   }
 
