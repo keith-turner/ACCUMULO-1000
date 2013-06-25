@@ -111,6 +111,8 @@ public class ConditionalWriterImpl implements ConditionalWriter {
             break;
           }
           
+          // TODO check key == condition columns
+
           if ((val == null ^ cc.getValue() == null) || (val != null && !cc.getValue().equals(new ArrayByteSequence(val.get())))) {
             results.add(new Result(Status.REJECTED, cm));
             continue mloop;
