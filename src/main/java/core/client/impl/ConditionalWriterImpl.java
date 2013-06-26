@@ -19,10 +19,13 @@ package core.client.impl;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReentrantLock;
 
 import org.apache.accumulo.core.client.BatchWriter;
 import org.apache.accumulo.core.client.BatchWriterConfig;
@@ -67,6 +70,55 @@ public class ConditionalWriterImpl implements ConditionalWriter {
     this.cache = new LRUMap(1000);
   }
   
+  private static Map<ByteSequence,RowLock> rowLocks = new HashMap();
+  
+  private static class RowLock {
+    ReentrantLock rlock;
+    int count;
+    ArrayByteSequence rowSeq;
+    
+    RowLock(ReentrantLock rlock, ArrayByteSequence rowSeq) {
+      this.rlock = rlock;
+      this.count = 0;
+      this.rowSeq = rowSeq;
+    }
+    
+    public void lock() {
+      rlock.lock();
+    }
+    
+    public void unlock() {
+      rlock.unlock();
+    }
+  }
+  
+  private static RowLock getRowLock(byte[] row) {
+    synchronized (rowLocks) {
+      ArrayByteSequence rowSeq = new ArrayByteSequence(row);
+      RowLock lock = rowLocks.get(rowSeq);
+      if (lock == null) {
+        lock = new RowLock(new ReentrantLock(), rowSeq);
+        // TODO will byte array change?
+        rowLocks.put(rowSeq, lock);
+      }
+      
+      lock.count++;
+      return lock;
+    }
+  }
+  
+  private static void returnRowLock(RowLock lock) {
+    synchronized (rowLocks) {
+      if (lock.count == 0)
+        throw new IllegalStateException();
+      lock.count--;
+      
+      if (lock.count == 0) {
+        rowLocks.remove(lock.rowSeq);
+      }
+    }
+  }
+
   public Iterator<Result> write(Iterator<ConditionalMutation> mutations) {
     
     try {
@@ -79,56 +131,63 @@ public class ConditionalWriterImpl implements ConditionalWriter {
         ConditionalMutation cm = mutations.next();
         
         byte[] row = cm.getRow();
-        
-        List<Condition> conditions = cm.getConditions();
-
-        for (Condition cc : conditions) {
-          
-          if (!isVisible(cc.getVisibility())) {
-            results.add(new Result(Status.INVISIBLE_VISIBILITY, cm));
-            continue mloop;
-          }
-
-          scanner.clearColumns();
-          
-          if (cc.getTimestamp() == null) {
-            scanner.setRange(Range.exact(new Text(row), new Text(cc.getFamily().toArray()), new Text(cc.getQualifier().toArray()), new Text(cc.getVisibility()
-                .toArray())));
-          } else {
-            scanner.setRange(Range.exact(new Text(row), new Text(cc.getFamily().toArray()), new Text(cc.getQualifier().toArray()), new Text(cc.getVisibility()
-                .toArray()), cc.getTimestamp()));
-          }
-
-          scanner.clearScanIterators();
-          for (IteratorSetting is : cc.getIterators()) {
-            scanner.addScanIterator(is);
-          }
-
-          Value val = null;
-          
-          for (Entry<Key,Value> entry : scanner) {
-            val = entry.getValue();
-            break;
-          }
-          
-          // TODO check key == condition columns
-
-          if ((val == null ^ cc.getValue() == null) || (val != null && !cc.getValue().equals(new ArrayByteSequence(val.get())))) {
-            results.add(new Result(Status.REJECTED, cm));
-            continue mloop;
-          }
-        }
-
+        RowLock rowLock = getRowLock(row);
+        rowLock.lock();
         try {
-          bw.addMutation(cm);
-          bw.close();
-          results.add(new Result(Status.ACCEPTED, cm));
-        } catch (MutationsRejectedException mre) {
-          results.add(new Result(Status.VIOLATED, cm));
-          continue mloop;
+        
+          List<Condition> conditions = cm.getConditions();
+          
+          for (Condition cc : conditions) {
+            
+            if (!isVisible(cc.getVisibility())) {
+              results.add(new Result(Status.INVISIBLE_VISIBILITY, cm));
+              continue mloop;
+            }
+            
+            scanner.clearColumns();
+            
+            if (cc.getTimestamp() == null) {
+              scanner.setRange(Range.exact(new Text(row), new Text(cc.getFamily().toArray()), new Text(cc.getQualifier().toArray()), new Text(cc
+                  .getVisibility().toArray())));
+            } else {
+              scanner.setRange(Range.exact(new Text(row), new Text(cc.getFamily().toArray()), new Text(cc.getQualifier().toArray()), new Text(cc
+                  .getVisibility().toArray()), cc.getTimestamp()));
+            }
+            
+            scanner.clearScanIterators();
+            for (IteratorSetting is : cc.getIterators()) {
+              scanner.addScanIterator(is);
+            }
+            
+            Value val = null;
+            
+            for (Entry<Key,Value> entry : scanner) {
+              val = entry.getValue();
+              break;
+            }
+            
+            // TODO check key == condition columns
+            
+            if ((val == null ^ cc.getValue() == null) || (val != null && !cc.getValue().equals(new ArrayByteSequence(val.get())))) {
+              results.add(new Result(Status.REJECTED, cm));
+              continue mloop;
+            }
+          }
+          
+          try {
+            bw.addMutation(cm);
+            bw.close();
+            results.add(new Result(Status.ACCEPTED, cm));
+          } catch (MutationsRejectedException mre) {
+            results.add(new Result(Status.VIOLATED, cm));
+            continue mloop;
+          } finally {
+            bw.close();
+            bw = conn.createBatchWriter(table, new BatchWriterConfig());
+          }
         } finally {
-          bw.close();
-          bw = conn.createBatchWriter(table, new BatchWriterConfig());
+          rowLock.unlock();
+          returnRowLock(rowLock);
         }
       }
 
