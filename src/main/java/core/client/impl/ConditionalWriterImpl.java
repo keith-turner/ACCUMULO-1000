@@ -70,7 +70,7 @@ public class ConditionalWriterImpl implements ConditionalWriter {
     this.cache = new LRUMap(1000);
   }
   
-  private static Map<ByteSequence,RowLock> rowLocks = new HashMap();
+  private static Map<ByteSequence,RowLock> rowLocks = new HashMap<ByteSequence,RowLock>();
   
   private static class RowLock {
     ReentrantLock rlock;
