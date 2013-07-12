@@ -23,7 +23,10 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map.Entry;
+import java.util.Random;
+import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.UUID;
 
 import org.apache.accumulo.core.Constants;
 import org.apache.accumulo.core.client.BatchWriter;
@@ -41,6 +44,8 @@ import org.apache.accumulo.core.iterators.LongCombiner.Type;
 import org.apache.accumulo.core.iterators.user.SummingCombiner;
 import org.apache.accumulo.core.security.Authorizations;
 import org.apache.accumulo.core.security.ColumnVisibility;
+import org.apache.accumulo.core.util.FastFormat;
+import org.apache.accumulo.core.util.UtilWaitThread;
 import org.apache.accumulo.examples.simple.constraints.AlphaNumKeyConstraint;
 import org.apache.accumulo.minicluster.MiniAccumuloCluster;
 import org.apache.accumulo.minicluster.MiniAccumuloConfig;
@@ -532,6 +537,97 @@ public class ConditionalWriterTest {
     scanner.clearColumns();
     scanner.fetchColumn(new Text("name"), new Text("last"));
     Assert.assertEquals("Doe", scanner.iterator().next().getValue().toString());
+  }
+  
+  private SortedSet<Text> nss(String... splits) {
+    TreeSet<Text> ret = new TreeSet<Text>();
+    for (String split : splits)
+      ret.add(new Text(split));
+    
+    return ret;
+  }
+
+  @Test
+  public void test1000() throws Exception {
+    
+    String table = "foo1000";
+    
+    ZooKeeperInstance zki = new ZooKeeperInstance(cluster.getInstanceName(), cluster.getZooKeepers());
+    Connector conn = zki.getConnector("root", new PasswordToken(secret));
+    
+    conn.tableOperations().create(table);
+    conn.tableOperations().addSplits(table, nss("2", "4", "6"));
+    
+    UtilWaitThread.sleep(2000);
+    
+    int num = 5000;
+    
+    ArrayList<byte[]> rows = new ArrayList<byte[]>(num);
+    ArrayList<ConditionalMutation> cml = new ArrayList<ConditionalMutation>(num);
+    
+    Random r = new Random();
+    byte[] e = new byte[0];
+    
+    for (int i = 0; i < num; i++) {
+      rows.add(FastFormat.toZeroPaddedString(Math.abs(r.nextLong()), 16, 16, e));
+    }
+    
+    for (int i = 0; i < num; i++) {
+      ConditionalMutation cm = new ConditionalMutation(rows.get(i));
+      cm.addCondition(new Condition("meta", "seq"));
+      
+      cm.put("meta", "seq", "1");
+      cm.put("meta", "tx", UUID.randomUUID().toString());
+      
+      cml.add(cm);
+    }
+    
+    ConditionalWriter cw = new ConditionalWriterImpl(table, conn, new Authorizations());
+    
+    long t1 = System.currentTimeMillis();
+    Iterator<Result> results = cw.write(cml.iterator());
+    long t2 = System.currentTimeMillis();
+    
+    System.out.println(t2 - t1);
+    
+    int count = 0;
+    
+    // TODO check got each row back
+    while (results.hasNext()) {
+      Result result = results.next();
+      Assert.assertEquals(Status.ACCEPTED, result.getStatus());
+      count++;
+    }
+    
+    Assert.assertEquals(num, count);
+    
+    ArrayList<ConditionalMutation> cml2 = new ArrayList<ConditionalMutation>(num);
+    
+    for (int i = 0; i < num; i++) {
+      ConditionalMutation cm = new ConditionalMutation(rows.get(i));
+      cm.addCondition(new Condition("meta", "seq").setValue("1"));
+      
+      cm.put("meta", "seq", "2");
+      cm.put("meta", "tx", UUID.randomUUID().toString());
+      
+      cml2.add(cm);
+    }
+    
+    count = 0;
+    
+    t1 = System.currentTimeMillis();
+    results = cw.write(cml2.iterator());
+    t2 = System.currentTimeMillis();
+    
+    System.out.println(t2 - t1);
+    
+    while (results.hasNext()) {
+      Result result = results.next();
+      Assert.assertEquals(Status.ACCEPTED, result.getStatus());
+      count++;
+    }
+    
+    Assert.assertEquals(num, count);
   }
   
   @Test

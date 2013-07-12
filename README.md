@@ -7,3 +7,9 @@ implementation in Accumulo.
 
 https://issues.apache.org/jira/browse/ACCUMULO-1000
 
+I have stopped working on this prototype and started implementing this in
+Accumulo. Its currently in a branch in svn
+
+https://svn.apache.org/repos/asf/accumulo/branches/ACCUMULO-1000
+
+
